@@ -32,6 +32,54 @@ ESPContainer.ResetOnSpawn = false
 ESPContainer.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ESPContainer.Parent = CoreGui
 
+-- Function to get equipped weapon
+function ESP:GetEquippedWeapon(character)
+    -- Look for tools in the character
+    for _, child in ipairs(character:GetChildren()) do
+        if child:IsA("Tool") then
+            return child.Name
+        end
+    end
+    
+    -- Check for weapons in the backpack if accessible
+    local player = Players:GetPlayerFromCharacter(character)
+    if player then
+        local backpack = player:FindFirstChild("Backpack")
+        if backpack then
+            for _, tool in ipairs(backpack:GetChildren()) do
+                if tool:IsA("Tool") and tool:FindFirstChild("Handle") then
+                    return tool.Name
+                end
+            end
+        end
+    end
+    
+    return "None"
+end
+
+-- Function to get player color
+function ESP:GetPlayerColor(player)
+    if self.Settings.TeamColor and player.Team then
+        return player.Team.TeamColor.Color
+    else
+        return Color3.fromRGB(255, 255, 255)
+    end
+end
+
+-- Function to remove ESP
+function ESP:RemoveESP(esp)
+    if esp.Container then esp.Container:Destroy() end
+    if esp.RenderConnection then esp.RenderConnection:Disconnect() end
+    
+    esp.Container = nil
+    esp.Label = nil
+    esp.HealthBar = nil
+    esp.HealthBarBackground = nil
+    esp.WeaponLabel = nil
+    esp.Box = nil
+    esp.RenderConnection = nil
+end
+
 -- Function to create ESP for a player
 function ESP:Create(player)
     if self.Players[player] then return end
@@ -179,7 +227,7 @@ function ESP:CharacterAdded(player, character)
         if onScreen then
             container.Visible = self.Enabled
             esp.Visible = self.Enabled
-            container.Position = UDim2.new(0, screenPos.X, 0, screenPos.Y)
+            container.Position = UDim2.new(0, screenPos.X - 100, 0, screenPos.Y - 35)
             
             -- Update box position and size
             if self.Settings.ShowBox then
@@ -290,8 +338,42 @@ function ESP:UpdateSetting(setting, value)
                     esp.Box.Visible = value and esp.Visible
                 elseif setting == "BoxColor" and esp.Box then
                     esp.Box.BorderColor3 = value
+                elseif setting == "TeamColor" and esp.Label then
+                    esp.Label.TextColor3 = self:GetPlayerColor(player)
                 end
             end
         end
     end
 end
+
+-- Function to initialize ESP
+function ESP:Initialize()
+    -- Create ESP for all players
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer then
+            self:Create(player)
+        end
+    end
+    
+    -- Listen for new players
+    Players.PlayerAdded:Connect(function(player)
+        if player ~= Players.LocalPlayer then
+            self:Create(player)
+        end
+    end)
+    
+    -- Listen for players leaving
+    Players.PlayerRemoving:Connect(function(player)
+        local esp = self.Players[player]
+        if esp then
+            self:RemoveESP(esp)
+            self.Players[player] = nil
+        end
+    end)
+end
+
+-- Initialize the ESP
+ESP:Initialize()
+
+-- Return the ESP module
+return ESP
